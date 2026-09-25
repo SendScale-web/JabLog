@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>JabLog – UK weight loss jab tracker</title>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f2f6f7;--card:#fff;--ink:#0e1f2b;--mut:#5b6b76;--ac:#0a7d6e;--ac2:#e0f2ef;--wn:#9a5b00;--wnb:#fff1d6;--ln:#dce5e8;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0b141a;--card:#132029;--ink:#e6eef2;--mut:#93a5b0;--ac:#3fd0bc;--ac2:#123a38;--wn:#ffc857;--wnb:#372a0b;--ln:#22343f}}
+:root[data-theme="dark"]{--bg:#0b141a;--card:#132029;--ink:#e6eef2;--mut:#93a5b0;--ac:#3fd0bc;--ac2:#123a38;--wn:#ffc857;--wnb:#372a0b;--ln:#22343f}
+html{scroll-padding-top:env(safe-area-inset-top,0px);height:100%}
+*{box-sizing:border-box}
+body{margin:0;min-height:100%;background:var(--bg);color:var(--ink);font:16px/1.45 Figtree,system-ui,-apple-system,Segoe UI,sans-serif}
+#main{max-width:560px;margin:0 auto;padding:16px 14px 92px}
+h1{font-size:26px;font-weight:800;margin:4px 0 2px;letter-spacing:-.02em}
+h2{font-size:17px;font-weight:800;margin:0 0 8px}
+p{margin:0 0 8px}.m{color:var(--mut);font-size:14px}
+.c{background:var(--card);border:1px solid var(--ln);border-radius:14px;padding:14px;margin:0 0 12px}
+.hero{display:flex;gap:16px;align-items:center}
+.ring{flex:none}
+label{display:block;font-size:13px;color:var(--mut);margin:8px 0 3px}
+input,select{width:100%;font:inherit;padding:10px;border:1px solid var(--ln);border-radius:10px;background:var(--bg);color:var(--ink)}
+input:focus,select:focus,button:focus-visible{outline:2px solid var(--ac);outline-offset:1px}
+.r{display:flex;gap:8px}.r>*{flex:1}
+button{font:inherit;font-weight:600;border:0;border-radius:10px;padding:11px 14px;background:var(--ac);color:#fff;cursor:pointer}
+button.g{background:var(--ac2);color:var(--ac)}button.d{background:none;color:var(--mut);padding:4px 8px;font-size:13px}
+.ch{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}.ch button{padding:7px 10px;font-size:13px}
+.bar{height:10px;border-radius:6px;background:var(--ln);overflow:hidden;margin:4px 0 8px}.bar i{display:block;height:100%;background:var(--ac)}
+.al{background:var(--wnb);color:var(--wn);border-radius:12px;padding:12px;margin:0 0 12px;font-size:14px}
+.row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-top:1px solid var(--ln);font-size:14px}
+.row:first-of-type{border-top:0}
+.big{font-size:28px;font-weight:800;letter-spacing:-.02em}
+table{width:100%;border-collapse:collapse;font-size:14px}td,th{text-align:left;padding:6px 4px;border-top:1px solid var(--ln)}
+nav{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--ln);display:flex;padding:6px 4px calc(6px + env(safe-area-inset-bottom,0px))}
+nav button{flex:1;background:none;color:var(--mut);font-size:11px;padding:6px 0;border-radius:8px}
+nav button b{display:block;font-size:18px;font-weight:600}nav button.on{color:var(--ac)}
+.sc{overflow-x:auto}
+@media print{body *{visibility:hidden}#rep,#rep *{visibility:visible}#rep{position:absolute;left:0;top:0;width:100%;border:0}}
+</style>
+</head>
+<body>
+<div id="main"></div>
+<nav id="nav"></nav>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script>
+const K='jablog:v1',$=s=>document.querySelector(s);
+const DEF={u:'st',h:170,goal:0,pt:100,wt:2000,weights:[],doses:[],fx:[],food:[],water:{},pens:[],maint:false,stop:'',trial:null,premium:false,notif:false};
+let S;try{S={...DEF,...JSON.parse(localStorage.getItem(K)||'{}')}}catch(e){S={...DEF}}
+const SB_URL='https://ioohtcdbpavylpbopjun.supabase.co',SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlvb2h0Y2RicGF2eWxwYm9wanVuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAyNjk5OTYsImV4cCI6MjEwNTg0NTk5Nn0.TPEgiLC2cmIjbbpHujfHimBeMjjb0Hl0V125BbFy__4';
+let sb=null,USER=null,ENT=null,pushT;
+try{if(SB_URL.startsWith('http'))sb=supabase.createClient(SB_URL,SB_KEY)}catch(x){}
+const save=()=>{try{localStorage.setItem(K,JSON.stringify(S))}catch(e){}push()};
+function push(){if(!sb||!USER)return;clearTimeout(pushT);pushT=setTimeout(async()=>{const{trial,premium,...data}=S;try{await sb.from('user_data').upsert({user_id:USER.id,data,updated_at:new Date().toISOString()})}catch(x){}},800)}
+async function pull(){
+  try{
+    const a=await sb.from('entitlements').select('*').eq('user_id',USER.id).maybeSingle();ENT=a.data;
+    const b=await sb.from('user_data').select('data').eq('user_id',USER.id).maybeSingle();
+    if(b.data&&b.data.data&&Object.keys(b.data.data).length)S={...DEF,...b.data.data,trial:null,premium:false};else push();
+    localStorage.setItem(K,JSON.stringify(S));
+  }catch(x){}
+  render()}
+function acct(){
+  if(!sb)return '<div class="al">Cloud sync is not set up yet. Add your Supabase URL and key at the top of the script.</div>';
+  if(USER)return `<div class="c"><h2>Account</h2><p class="m">Signed in as ${e(USER.email)}. Your data syncs across devices. ${ENT?(ENT.premium?'Premium active.':trialOn()?'Trial ends '+fd(ENT.trial_ends_at.slice(0,10))+'.':'Trial ended.'):''}</p>${ENT&&ENT.premium?'<button onclick="portal()">Manage subscription</button>':subBtns()}<p></p><button class="g" onclick="signOut()">Sign out</button></div>`;
+  return `<div class="c"><h2>Create account or sign in</h2><p class="m">Sync across devices and start your 7-day Premium trial.</p><label>Email</label><input id="em" type="email" autocomplete="email"><label>Password (8+ characters)</label><input id="pw" type="password" autocomplete="current-password"><p></p><div class="r"><button onclick="auth('up')">Create account</button><button class="g" onclick="auth('in')">Sign in</button></div></div>`}
+async function auth(m){
+  const c={email:$v('em'),password:$v('pw')};
+  try{const r=m==='up'?await sb.auth.signUp(c):await sb.auth.signInWithPassword(c);
+    if(r.error)return alert(r.error.message);
+    if(m==='up'&&!r.data.session)alert('Check your email to confirm your account, then sign in.');
+  }catch(x){alert('Could not reach the server. Check your connection.')}}
+const subBtns=()=>`<div class="r"><button onclick="checkout('monthly')">£4.99 / month</button><button class="g" onclick="checkout('yearly')">£29.99 / year</button></div>`;
+async function checkout(plan){try{const r=await sb.functions.invoke('create-checkout',{body:{plan}});if(r.data&&r.data.url)location.href=r.data.url;else alert(r.data&&r.data.error?r.data.error:'Could not start checkout. Please try again.')}catch(x){alert('Could not start checkout. Please try again.')}}
+async function portal(){try{const r=await sb.functions.invoke('billing-portal');if(r.data&&r.data.url)location.href=r.data.url;else alert(r.data&&r.data.error?r.data.error:'Could not open billing. Please try again.')}catch(x){alert('Could not open billing. Please try again.')}}
+async function signOut(){await sb.auth.signOut();USER=null;ENT=null;S={...DEF};try{localStorage.setItem(K,JSON.stringify(S))}catch(x){}render()}
+const D={Tirzepatide:[2.5,5,7.5,10,12.5,15],Semaglutide:[0.25,0.5,1,1.7,2.4,7.2]};
+const SITES=['Left abdomen','Right abdomen','Left thigh','Right thigh','Left upper arm','Right upper arm'];
+const FOODS=[['Chicken breast 100g',31],['Skyr 150g',16],['2 eggs',12],['Cottage cheese 100g',11],['Greek yoghurt 150g',13],['Tuna tin',25],['Whey scoop',24],['Protein bar',20],['Quorn pieces 100g',14],['Lentils 150g cooked',13]];
+const FXS=['Nausea','Vomiting','Constipation','Diarrhoea','Fatigue','Headache','Reflux','Injection-site reaction','Low appetite'];
+const PROVS=['Numan','Voy','Boots','Lloyds','Other'];
+let tab='today';
+const td=()=>new Date().toLocaleDateString('en-CA');
+const dt=s=>new Date(s+'T12:00');
+const dd=(a,b)=>Math.round((dt(b)-dt(a))/864e5);
+const add=(s,n)=>{const d=dt(s);d.setDate(d.getDate()+n);return d.toLocaleDateString('en-CA')};
+const fd=s=>dt(s).toLocaleDateString('en-GB',{day:'numeric',month:'short'});
+const e=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const $v=id=>{const x=document.getElementById(id);return x?x.value:''};
+const fw=kg=>{if(S.u==='kg')return kg.toFixed(1)+' kg';if(S.u==='lb')return (kg*2.20462).toFixed(1)+' lb';const t=kg*2.20462,st=Math.floor(t/14);return st+' st '+(t-st*14).toFixed(1)+' lb'};
+const fdiff=kg=>(kg<0?'−':'+')+(S.u==='kg'?Math.abs(kg).toFixed(1)+' kg':(Math.abs(kg)*2.20462).toFixed(1)+' lb');
+const bmi=kg=>kg/((S.h/100)**2);
+const lastW=()=>S.weights[S.weights.length-1];
+const lastD=()=>S.doses[S.doses.length-1];
+const trialOn=()=>!!(ENT&&ENT.trial_ends_at&&new Date(ENT.trial_ends_at)>new Date());
+const unlocked=()=>!!(ENT&&(ENT.premium||trialOn()));
+const gbp=n=>'£'+n.toFixed(2);
+const nextDue=()=>{const l=lastD();return l?add(l.d,7):null};
+const sugSite=()=>{let best=SITES[0],bd=1e9;SITES.forEach(s=>{const u=S.doses.filter(x=>x.site===s).pop();const v=u?dt(u.d).getTime():0;if(v<bd){bd=v;best=s}});return best};
+
+function paywall(what){
+  return `<div class="c"><h2>${what} is a Premium feature</h2><p class="m">Premium is £4.99 a month or £29.99 a year. Weight and dose logging stay free.</p>${!USER?`<button onclick="go('more')">Create free account · 7-day trial</button>`:`<p class="m">Your trial has ended. Subscribe to keep using Premium.</p>${subBtns()}`}</div>`}
+
+function ring(days){
+  const p=days===null?0:Math.max(0,Math.min(1,(7-days)/7)),r=42,c=2*Math.PI*r;
+  const t=days===null?'–':days<0?'!':days;
+  return `<svg class="ring" width="104" height="104" viewBox="0 0 104 104" role="img" aria-label="Days until next dose"><circle cx="52" cy="52" r="${r}" fill="none" stroke="var(--ln)" stroke-width="10"/><circle cx="52" cy="52" r="${r}" fill="none" stroke="${days!==null&&days<0?'var(--wn)':'var(--ac)'}" stroke-width="10" stroke-linecap="round" stroke-dasharray="${c*p} ${c}" transform="rotate(-90 52 52)"/><text x="52" y="58" text-anchor="middle" font-size="26" font-weight="800" fill="currentColor">${t}</text></svg>`}
+
+function doseStatus(){
+  const n=nextDue();if(!n)return{days:null,txt:'Log your first dose to start the countdown.',late:false};
+  const d=dd(td(),n);
+  if(d>1)return{days:d,txt:`Next dose due ${fd(n)}, in ${d} days.`,late:false};
+  if(d===1)return{days:1,txt:'Next dose is due tomorrow.',late:false};
+  if(d===0)return{days:0,txt:'Your dose is due today.',late:false};
+  return{days:d,txt:`Your dose is ${-d} day${d===-1?'':'s'} overdue. Check your prescriber or pharmacist's guidance on what to do.`,late:true}}
+
+function plateau(){
+  const w=S.weights.filter(x=>dd(x.d,td())<=21);
+  if(w.length<3||dd(w[0].d,w[w.length-1].d)<14)return false;
+  const k=w.map(x=>x.kg);return Math.max(...k)-Math.min(...k)<0.6}
+
+function bar(v,max,label){return `<div class="row" style="border:0;padding:0"><span>${label}</span><span class="m">${v} / ${max}</span></div><div class="bar"><i style="width:${Math.min(100,v/max*100)}%"></i></div>`}
+const protToday=()=>S.food.filter(x=>x.d===td()).reduce((a,x)=>a+x.p,0);
+const waterToday=()=>S.water[td()]||0;
+
+function vToday(){
+  const st=doseStatus(),lw=lastW();
+  let h=`<h1>Today</h1><p class="m">${new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'})}</p>`;
+  if(st.late)h+=`<div class="al">${st.txt}</div>`;
+  h+=`<div class="c hero">${ring(st.days)}<div><h2>Dose countdown</h2><p class="m">${st.late?'Dose overdue.':st.txt}</p><button class="g" onclick="go('dose')">Log a dose</button></div></div>`;
+  h+=`<div class="c">${bar(protToday(),S.pt,'Protein (g)')}${bar(waterToday(),S.wt,'Water (ml)')}<div class="ch"><button class="g" onclick="addWater(250)">+250 ml</button><button class="g" onclick="addWater(500)">+500 ml</button><button class="g" onclick="go('food')">Add food</button></div></div>`;
+  if(lw){const f=S.weights[0];h+=`<div class="c"><h2>Weight</h2><div class="big">${fw(lw.kg)}</div><p class="m">BMI ${bmi(lw.kg).toFixed(1)} · ${fdiff(lw.kg-f.kg)} since ${fd(f.d)}</p></div>`}
+  else h+=`<div class="c"><h2>Weight</h2><p class="m">Add your first weigh-in to see progress.</p><button onclick="go('weight')">Log weight</button></div>`;
+  if(S.maint&&S.goal&&lw){const o=lw.kg-S.goal;h+=`<div class="${o>2?'al':'c'}"><h2>Maintenance</h2><p class="m" style="margin:0">${o>2?`You are ${fdiff(o)} above your target. Time to review your routine.`:`Within 2 kg of your target weight. Keep it up.`}</p></div>`}
+  else if(plateau())h+=`<div class="al"><b>Plateau spotted.</b> Your weight has barely moved in 3 weeks. Check protein, fibre and strength training, and talk to your clinician if it persists.</div>`;
+  return h+foot()}
+
+function vDose(){
+  const st=doseStatus(),drug=(lastD()||{}).drug||'Tirzepatide',ds=[...S.doses].map((x,i)=>({...x,i})).reverse();
+  let h=`<h1>Doses</h1><p class="m">${st.txt}</p>`;
+  if(st.late)h+=`<div class="al">${st.txt}</div>`;
+  h+=`<div class="c"><h2>Log an injection</h2>
+  <label>Medicine</label><select id="dg" onchange="dsel()">${Object.keys(D).map(k=>`<option ${k===drug?'selected':''}>${k}</option>`).join('')}</select>
+  <div class="r"><div><label>Dose (mg)</label><select id="dm">${D[drug].map(x=>`<option>${x}</option>`).join('')}</select></div><div><label>Date</label><input id="dd" type="date" value="${td()}"></div></div>
+  <label>Injection site (least recently used first)</label><select id="ds">${SITES.map(s=>`<option ${s===sugSite()?'selected':''}>${s}</option>`).join('')}</select>
+  <p></p><button onclick="addDose()">Save dose</button></div>
+  <div class="c"><h2>Reminders</h2><p class="m">${S.notif?'Alerts on. You will get a notification when you open JabLog and a dose is due.':'Get an alert when a dose is due or overdue while JabLog is open.'}</p><button class="g" onclick="askNotif()">${S.notif?'Alerts enabled':'Enable alerts'}</button></div>
+  <div class="c"><h2>History</h2>${ds.length?ds.slice(0,20).map(x=>`<div class="row"><span>${fd(x.d)} · ${e(x.drug)} ${x.mg} mg<br><span class="m">${e(x.site)}</span></span><button class="d" onclick="del('doses',${x.i})">Delete</button></div>`).join(''):'<p class="m">No doses logged yet.</p>'}</div>`;
+  return h+foot()}
+
+function chart(){
+  const w=S.weights.slice(-30);if(w.length<2)return '<p class="m">Log 2 or more weigh-ins to see your chart.</p>';
+  const k=w.map(x=>x.kg),mn=Math.min(...k)-.5,mx=Math.max(...k)+.5,W=320,H=130;
+  const pts=w.map((x,i)=>[8+i*(W-16)/(w.length-1),H-10-(x.kg-mn)/(mx-mn)*(H-20)]);
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Weight chart"><polyline points="${pts.map(p=>p.join(',')).join(' ')}" fill="none" stroke="var(--ac)" stroke-width="3" stroke-linejoin="round"/>${pts.map(p=>`<circle cx="${p[0]}" cy="${p[1]}" r="3.5" fill="var(--ac)"/>`).join('')}</svg>`}
+
+function vWeight(){
+  const lw=lastW(),ws=[...S.weights].map((x,i)=>({...x,i})).reverse();
+  const inp=S.u==='st'?`<div class="r"><div><label>Stone</label><input id="w1" type="number" inputmode="decimal"></div><div><label>Pounds</label><input id="w2" type="number" inputmode="decimal" step="0.1"></div></div>`:`<label>${S.u==='kg'?'Kilograms':'Pounds'}</label><input id="w1" type="number" inputmode="decimal" step="0.1">`;
+  let h=`<h1>Weight</h1>`;
+  if(lw)h+=`<div class="c"><div class="big">${fw(lw.kg)}</div><p class="m">BMI ${bmi(lw.kg).toFixed(1)}${S.goal?` · ${fdiff(lw.kg-S.goal)} from target`:''}</p>${chart()}</div>`;
+  h+=`<div class="c"><h2>Add weigh-in</h2>${inp}<label>Date</label><input id="wd" type="date" value="${td()}"><p></p><button onclick="addW()">Save weight</button></div>`;
+  h+=`<div class="c"><h2>Maintenance mode</h2><p class="m">Switch on when you reach your target or stop the medication. JabLog watches for regain.</p>
+  <div class="ch"><button class="${S.maint?'':'g'}" onclick="S.maint=!S.maint;save();render()">${S.maint?'Maintenance on':'Turn on maintenance'}</button></div>
+  ${S.maint?`<label>Date you stopped medication (optional)</label><input id="sd" type="date" value="${S.stop}" onchange="S.stop=this.value;save();render()">${S.stop&&lw?(()=>{const b=[...S.weights].reverse().find(x=>x.d<=S.stop);return b?`<p class="m">Since stopping: ${fdiff(lw.kg-b.kg)}</p>`:''})():''}<p class="m">Set your target weight in More.</p>`:''}</div>`;
+  h+=`<div class="c"><h2>History</h2>${ws.length?ws.slice(0,20).map(x=>`<div class="row"><span>${fd(x.d)} · ${fw(x.kg)}</span><button class="d" onclick="del('weights',${x.i})">Delete</button></div>`).join(''):'<p class="m">No weigh-ins yet.</p>'}</div>`;
+  return h+foot()}
+
+function vFood(){
+  if(!unlocked())return `<h1>Food</h1>`+paywall('Protein and water tracking')+foot();
+  const fs=S.food.map((x,i)=>({...x,i})).filter(x=>x.d===td()).reverse();
+  return `<h1>Food</h1><div class="c">${bar(protToday(),S.pt,'Protein (g)')}${bar(waterToday(),S.wt,'Water (ml)')}<div class="ch"><button class="g" onclick="addWater(250)">+250 ml</button><button class="g" onclick="addWater(500)">+500 ml</button><button class="g" onclick="S.water[td()]=0;save();render()">Reset</button></div></div>
+  <div class="c"><h2>Quick add (approx. protein)</h2><div class="ch">${FOODS.map((f,i)=>`<button class="g" onclick="addFood(FOODS[${i}][0],FOODS[${i}][1])">${f[0]} · ${f[1]}g</button>`).join('')}</div>
+  <div class="r"><div><label>Custom food</label><input id="fn" placeholder="e.g. Tesco chicken wrap"></div><div><label>Protein (g)</label><input id="fp" type="number" inputmode="decimal"></div></div><p></p><button onclick="addFood($v('fn')||'Food',+$v('fp'))">Add food</button>
+  <p class="m" style="margin-top:8px">Barcode scanning arrives with the food database in the next update.</p></div>
+  <div class="c"><h2>Today</h2>${fs.length?fs.map(x=>`<div class="row"><span>${e(x.n)} · ${x.p}g</span><button class="d" onclick="del('food',${x.i})">Delete</button></div>`).join(''):'<p class="m">Nothing logged today.</p>'}</div>`+foot()}
+
+function vCost(){
+  if(!unlocked())return `<h1>Spend</h1>`+paywall('The £ spend tracker')+foot();
+  const P=S.pens,tot=P.reduce((a,x)=>a+x.c,0),lw=lastW(),f=S.weights[0];
+  const lost=lw&&f?f.kg-lw.kg:0;
+  const mo=P.length?Math.max(1,dd(P[0].d,td())/30.4):1;
+  const by={};P.forEach(x=>{(by[x.p]=by[x.p]||[]).push(x.c)});
+  const avg=P.length?tot/P.length:0;
+  return `<h1>Spend</h1><div class="c"><div class="r"><div><div class="big">${gbp(tot)}</div><p class="m">Total spent</p></div><div><div class="big">${gbp(tot/mo)}</div><p class="m">Per month</p></div></div>
+  <p class="m" style="margin:0">${lost>0.5?`Cost per ${S.u==='kg'?'kg':'lb'} lost: <b>${gbp(S.u==='kg'?tot/lost:tot/(lost*2.20462))}</b>`:'Cost per kg lost appears once you have lost weight.'}</p></div>
+  <div class="c"><h2>Add a pen purchase</h2><div class="r"><div><label>Provider</label><select id="pp">${PROVS.map(x=>`<option>${x}</option>`).join('')}</select></div><div><label>Price (£)</label><input id="pc" type="number" inputmode="decimal" step="0.01"></div></div>
+  <div class="r"><div><label>Date</label><input id="pd" type="date" value="${td()}"></div></div><p></p><button onclick="addPen()">Save purchase</button></div>
+  ${Object.keys(by).length?`<div class="c"><h2>By provider</h2><table><tr><th>Provider</th><th>Pens</th><th>Avg price</th></tr>${Object.keys(by).map(k=>`<tr><td>${k}</td><td>${by[k].length}</td><td>${gbp(by[k].reduce((a,b)=>a+b,0)/by[k].length)}</td></tr>`).join('')}</table></div>
+  <div class="c"><h2>Switching provider?</h2><label>Quoted price per pen (£)</label><input id="alt" type="number" inputmode="decimal" step="0.01" oninput="what(${avg})"><p class="m" id="wi" style="margin-top:8px">Enter a price to compare with your average of ${gbp(avg)}.</p></div>`:''}
+  <div class="c"><h2>Purchases</h2>${P.length?[...P].map((x,i)=>({...x,i})).reverse().map(x=>`<div class="row"><span>${fd(x.d)} · ${x.p} · ${gbp(x.c)}</span><button class="d" onclick="del('pens',${x.i})">Delete</button></div>`).join(''):'<p class="m">No purchases logged.</p>'}</div>`+foot()}
+
+function vMore(){
+  const fx=[...S.fx].map((x,i)=>({...x,i})).reverse();
+  const w0=S.goal?(S.u==='kg'?S.goal.toFixed(1):(S.goal*2.20462).toFixed(1)):'';
+  let h=`<h1>More</h1>${acct()}<div class="c"><h2>Settings</h2>
+  <label>Weight units</label><select id="su" onchange="S.u=this.value;save();render()">${[['st','Stone and lb'],['kg','Kilograms'],['lb','Pounds']].map(x=>`<option value="${x[0]}" ${S.u===x[0]?'selected':''}>${x[1]}</option>`).join('')}</select>
+  <div class="r"><div><label>Height (cm)</label><input id="sh" type="number" value="${S.h}" onchange="S.h=+this.value||170;save()"></div><div><label>Target weight (${S.u==='kg'?'kg':'lb'})</label><input id="sg" type="number" step="0.1" value="${w0}" onchange="S.goal=this.value?(S.u==='kg'?+this.value:+this.value/2.20462):0;save()"></div></div>
+  <div class="r"><div><label>Protein goal (g)</label><input type="number" value="${S.pt}" onchange="S.pt=+this.value||100;save()"></div><div><label>Water goal (ml)</label><input type="number" value="${S.wt}" onchange="S.wt=+this.value||2000;save()"></div></div></div>`;
+  if(!unlocked())return h+paywall('Side-effect log and GP report')+foot();
+  h+=`<div class="c"><h2>Side-effect log</h2><div class="r"><div><label>Symptom</label><select id="fs">${FXS.map(x=>`<option>${x}</option>`).join('')}</select></div><div><label>Severity</label><select id="fv"><option>Mild</option><option>Moderate</option><option>Severe</option></select></div></div>
+  <label>Note (optional)</label><input id="fnote"><p></p><button onclick="addFx()">Save entry</button>
+  ${fx.slice(0,10).map(x=>`<div class="row"><span>${fd(x.d)} · ${e(x.t)} (${x.v})${x.n?`<br><span class="m">${e(x.n)}</span>`:''}</span><button class="d" onclick="del('fx',${x.i})">Delete</button></div>`).join('')}</div>`;
+  const lw=lastW(),f=S.weights[0],since=dd(add(td(),-90),td());
+  h+=`<div class="c" id="rep"><h2>GP / pharmacist report</h2><p class="m">Generated ${fd(td())} ${new Date().getFullYear()}</p>
+  <p><b>Weight:</b> ${f&&lw?`${fw(f.kg)} (${fd(f.d)}) to ${fw(lw.kg)} (${fd(lw.d)}), ${fdiff(lw.kg-f.kg)}. BMI ${bmi(lw.kg).toFixed(1)}.`:'No weigh-ins.'}</p>
+  <p><b>Recent doses:</b></p>${S.doses.slice(-12).reverse().map(x=>`<div>${fd(x.d)}: ${x.drug} ${x.mg} mg, ${x.site}</div>`).join('')||'<div>None logged.</div>'}
+  <p style="margin-top:8px"><b>Side effects (last 90 days):</b></p>${S.fx.filter(x=>dd(x.d,td())<=90).reverse().map(x=>`<div>${fd(x.d)}: ${x.t}, ${x.v}${x.n?' – '+e(x.n):''}</div>`).join('')||'<div>None logged.</div>'}
+  <p class="m" style="margin-top:8px">Self-reported data from JabLog. Not a medical record.</p></div>
+  <button onclick="window.print()">Save report as PDF</button><p class="m" style="margin-top:6px">Choose “Save as PDF” in the print dialog.</p>`;
+  h+=`<p style="margin-top:14px"><button class="d" onclick="if(confirm('Delete all JabLog data on this device?')){S={...DEF};save();render()}">Delete all my data</button></p>`;
+  return h+foot()}
+
+const foot=()=>`<p class="m" style="margin-top:14px">JabLog is a personal tracker, not medical advice. Always follow your prescriber's instructions. Signed-in accounts sync securely. Without an account, data stays on this device.</p>`;
+
+function go(t){tab=t;render();window.scrollTo(0,0)}
+function render(){
+  $('#main').innerHTML=({today:vToday,dose:vDose,weight:vWeight,food:vFood,cost:vCost,more:vMore})[tab]();
+  $('#nav').innerHTML=[['today','🏠','Today'],['dose','💉','Doses'],['weight','⚖️','Weight'],['food','🥩','Food'],['cost','£','Spend'],['more','⋯','More']].map(x=>`<button class="${tab===x[0]?'on':''}" onclick="go('${x[0]}')"><b>${x[1]}</b>${x[2]}</button>`).join('')}
+function dsel(){const d=$v('dg');$('#dm').innerHTML=D[d].map(x=>`<option>${x}</option>`).join('')}
+function addW(){
+  let kg=S.u==='st'?((+$v('w1')||0)*14+(+$v('w2')||0))/2.20462:S.u==='lb'?(+$v('w1'))/2.20462:+$v('w1');
+  if(!(kg>20&&kg<400))return alert('Enter a valid weight.');
+  S.weights.push({d:$v('wd')||td(),kg});S.weights.sort((a,b)=>a.d.localeCompare(b.d));save();render()}
+function addDose(){S.doses.push({d:$v('dd')||td(),drug:$v('dg'),mg:+$v('dm'),site:$v('ds')});S.doses.sort((a,b)=>a.d.localeCompare(b.d));save();render()}
+function addFood(n,p){if(!(p>=0)||!n)return;S.food.push({d:td(),n,p:+p});save();render()}
+function addWater(ml){S.water[td()]=waterToday()+ml;save();render()}
+function addPen(){const c=+$v('pc');if(!(c>0))return alert('Enter the price.');S.pens.push({d:$v('pd')||td(),p:$v('pp'),c});S.pens.sort((a,b)=>a.d.localeCompare(b.d));save();render()}
+function addFx(){S.fx.push({d:td(),t:$v('fs'),v:$v('fv'),n:$v('fnote')});save();render()}
+function del(k,i){S[k].splice(i,1);save();render()}
+function what(avg){const a=+$v('alt');$('#wi').textContent=a>0?(avg-a>0?`Saves ${gbp(avg-a)} per pen, about ${gbp((avg-a)*13)} a year.`:`Costs ${gbp(a-avg)} more per pen than your average.`):'Enter a price to compare.'}
+function askNotif(){try{Notification.requestPermission().then(p=>{S.notif=p==='granted';save();render()})}catch(x){alert('Alerts are not supported in this browser.')}}
+try{if(S.notif&&Notification.permission==='granted'){const s=doseStatus();if(s.days!==null&&s.days<=0)new Notification('JabLog',{body:s.txt})}}catch(x){}
+render();
+if(location.search.includes('paid=1')){history.replaceState(null,'',location.pathname);[3000,8000].forEach(t=>setTimeout(()=>{if(USER)pull()},t))}
+if(sb)sb.auth.onAuthStateChange((ev,ses)=>{const u=ses?ses.user:null;if(u&&(!USER||USER.id!==u.id)){USER=u;setTimeout(pull,0)}else if(!u&&USER){USER=null;ENT=null}});
+</script>
+</body>
+</html>
