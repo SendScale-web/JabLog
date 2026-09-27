@@ -45,8 +45,9 @@ nav button b{display:block;font-size:18px;font-weight:600}nav button.on{color:va
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script>
 const K='jablog:v1',$=s=>document.querySelector(s);
-const DEF={u:'st',h:170,goal:0,pt:100,wt:2000,weights:[],doses:[],fx:[],food:[],water:{},pens:[],maint:false,stop:'',trial:null,premium:false,notif:false};
+const DEF={u:'st',h:170,goal:0,pt:100,wt:2000,weights:[],doses:[],fx:[],food:[],water:{},pens:[],maint:false,stop:'',trial:null,premium:false,notif:false,onboarded:false,dismissedSave:false};
 let S;try{S={...DEF,...JSON.parse(localStorage.getItem(K)||'{}')}}catch(e){S={...DEF}}
+if(!S.onboarded&&(S.weights.length||S.doses.length))S.onboarded=true;
 const SB_URL='https://ioohtcdbpavylpbopjun.supabase.co',SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlvb2h0Y2RicGF2eWxwYm9wanVuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAyNjk5OTYsImV4cCI6MjEwNTg0NTk5Nn0.TPEgiLC2cmIjbbpHujfHimBeMjjb0Hl0V125BbFy__4';
 let sb=null,USER=null,ENT=null,pushT;
 try{if(SB_URL.startsWith('http'))sb=supabase.createClient(SB_URL,SB_KEY)}catch(x){}
@@ -57,6 +58,7 @@ async function pull(){
     const a=await sb.from('entitlements').select('*').eq('user_id',USER.id).maybeSingle();ENT=a.data;
     const b=await sb.from('user_data').select('data').eq('user_id',USER.id).maybeSingle();
     if(b.data&&b.data.data&&Object.keys(b.data.data).length)S={...DEF,...b.data.data,trial:null,premium:false};else push();
+    S.onboarded=true;
     localStorage.setItem(K,JSON.stringify(S));
   }catch(x){}
   render()}
@@ -259,10 +261,35 @@ function timeline(){
   if(S.maint&&S.stop)items.push({d:S.stop,ic:'⏸',txt:'Stopped medication · maintenance mode started'});
   return items.sort((a,b)=>b.d.localeCompare(a.d)).slice(0,40)}
 
-const foot=()=>`<p class="m" style="margin-top:14px">JabLog is a personal tracker, not medical advice. Always follow your prescriber's instructions. Signed-in accounts sync securely. Without an account, data stays on this device.</p>`;
+function vAuthGate(){
+  return `<div style="padding-top:28px">
+  <h1>JabLog</h1>
+  <p class="m">A private tracker for UK weight-loss jabs — doses, weight, spend and side effects, in one place. Create a free account to get started; it keeps your data backed up from your very first entry.</p>
+  <div class="c"><h2>Create account or sign in</h2><label>Email</label><input id="em" type="email" autocomplete="email"><label>Password (8+ characters)</label><input id="pw" type="password" autocomplete="current-password"><p></p><div class="r"><button onclick="auth('up')">Create account</button><button class="g" onclick="auth('in')">Sign in</button></div><p class="m" style="margin-top:8px">By continuing you confirm you're 18 or over and agree to our <a href="https://claude.ai/artifact/JvdxrATqcShMfpuDDJEr3b" target="_blank" rel="noopener" style="color:var(--ac)">Privacy Policy</a> and <a href="https://claude.ai/artifact/MDy5YmBGYJZosJAdP5hvvK" target="_blank" rel="noopener" style="color:var(--ac)">Terms</a>.</p></div>
+  <p class="m">Free to track doses and weight. 7-day trial on everything else.</p></div>`}
+
+function vOnboard(){
+  const w0=S.goal?(S.u==='kg'?S.goal.toFixed(1):(S.goal*2.20462).toFixed(1)):'';
+  return `<div style="padding-top:24px">
+  <h1>Quick setup</h1>
+  <p class="m">A few basics, then you're straight in.</p>
+  <div class="c"><h2>The basics</h2>
+  <label>Weight units</label><select id="ob-u">${[['st','Stone and lb'],['kg','Kilograms'],['lb','Pounds']].map(x=>`<option value="${x[0]}" ${S.u===x[0]?'selected':''}>${x[1]}</option>`).join('')}</select>
+  <div class="r"><div><label>Height (cm)</label><input id="ob-h" type="number" value="${S.h}"></div><div><label>Target weight, optional (${S.u==='kg'?'kg':'lb'})</label><input id="ob-g" type="number" step="0.1" value="${w0}"></div></div></div>
+  <button onclick="finishOnboard()">Continue</button>
+  ${foot()}</div>`}
+function finishOnboard(){
+  const u=$v('ob-u'),h=+$v('ob-h')||170,g=$v('ob-g');
+  S.u=u||S.u;S.h=h;S.goal=g?(u==='kg'?+g:+g/2.20462):0;
+  S.onboarded=true;save();tab='today';render();window.scrollTo(0,0)}
+
+const foot=()=>`<p class="m" style="margin-top:14px">JabLog is a personal tracker, not medical advice. Always follow your prescriber's instructions. Your account keeps this data backed up and synced across your devices.</p>`;
 
 function go(t){if(t!=='dose')edI=null;tab=t;render();window.scrollTo(0,0)}
 function render(){
+  if(sb&&!authChecked){$('#main').innerHTML='<p class="m" style="padding-top:44px;text-align:center">Loading…</p>';$('#nav').innerHTML='';return}
+  if(sb&&!USER){$('#main').innerHTML=vAuthGate();$('#nav').innerHTML='';return}
+  if(!S.onboarded){$('#main').innerHTML=vOnboard();$('#nav').innerHTML='';return}
   $('#main').innerHTML=({today:vToday,dose:vDose,weight:vWeight,food:vFood,cost:vCost,more:vMore})[tab]();
   $('#nav').innerHTML=[['today','🏠','Today'],['dose','💉','Doses'],['weight','⚖️','Weight'],['food','🥩','Food'],['cost','£','Spend'],['more','⋯','More']].map(x=>`<button class="${tab===x[0]?'on':''}" onclick="go('${x[0]}')"><b>${x[1]}</b>${x[2]}</button>`).join('')}
 function dsel(){const d=$v('dg');$('#dm').innerHTML=D[d].map(x=>`<option>${x}</option>`).join('')}
@@ -279,9 +306,22 @@ function del(k,i){S[k].splice(i,1);save();render()}
 function what(avg){const a=+$v('alt');$('#wi').textContent=a>0?(avg-a>0?`Saves ${gbp(avg-a)} per pen, about ${gbp((avg-a)*13)} a year.`:`Costs ${gbp(a-avg)} more per pen than your average.`):'Enter a price to compare.'}
 function askNotif(){try{Notification.requestPermission().then(p=>{S.notif=p==='granted';save();render()})}catch(x){alert('Alerts are not supported in this browser.')}}
 try{if(S.notif&&Notification.permission==='granted'){const s=doseStatus();if(s.days!==null&&s.days<=0)new Notification('JabLog',{body:s.txt})}}catch(x){}
+
+let authChecked=false;
 render();
+if(!sb){authChecked=true}
+else{
+  sb.auth.getSession().then(({data})=>{
+    USER=data&&data.session?data.session.user:null;authChecked=true;
+    if(USER)pull();else render();
+  }).catch(()=>{authChecked=true;render()});
+  sb.auth.onAuthStateChange((ev,ses)=>{
+    const u=ses?ses.user:null;
+    if(u&&(!USER||USER.id!==u.id)){USER=u;authChecked=true;pull()}
+    else if(!u&&USER){USER=null;ENT=null;authChecked=true;render()}
+  });
+}
 if(location.search.includes('paid=1')){history.replaceState(null,'',location.pathname);[3000,8000].forEach(t=>setTimeout(()=>{if(USER)pull()},t))}
-if(sb)sb.auth.onAuthStateChange((ev,ses)=>{const u=ses?ses.user:null;if(u&&(!USER||USER.id!==u.id)){USER=u;setTimeout(pull,0)}else if(!u&&USER){USER=null;ENT=null}});
 </script>
 </body>
 </html>
