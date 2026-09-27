@@ -79,7 +79,7 @@ const SITES=['Left abdomen','Right abdomen','Left thigh','Right thigh','Left upp
 const FOODS=[['Chicken breast 100g',31],['Skyr 150g',16],['2 eggs',12],['Cottage cheese 100g',11],['Greek yoghurt 150g',13],['Tuna tin',25],['Whey scoop',24],['Protein bar',20],['Quorn pieces 100g',14],['Lentils 150g cooked',13]];
 const FXS=['Nausea','Vomiting','Constipation','Diarrhoea','Fatigue','Headache','Reflux','Injection-site reaction','Low appetite'];
 const PROVS=['Numan','Voy','Boots','Lloyds','Other'];
-let tab='today';
+let tab='today';let edI=null;
 const td=()=>new Date().toLocaleDateString('en-CA');
 const dt=s=>new Date(s+'T12:00');
 const dd=(a,b)=>Math.round((dt(b)-dt(a))/864e5);
@@ -114,6 +114,12 @@ function doseStatus(){
   if(d===0)return{days:0,txt:'Your dose is due today.',late:false};
   return{days:d,txt:`Your dose is ${-d} day${d===-1?'':'s'} overdue. Check your prescriber or pharmacist's guidance on what to do.`,late:true}}
 
+function trend(days){
+  if(S.weights.length<2)return null;
+  const lw=lastW(),cutoff=add(lw.d,-days);
+  const past=[...S.weights].reverse().find(x=>x.d<=cutoff);
+  return past?lw.kg-past.kg:null}
+
 function plateau(){
   const w=S.weights.filter(x=>dd(x.d,td())<=21);
   if(w.length<3||dd(w[0].d,w[w.length-1].d)<14)return false;
@@ -127,25 +133,29 @@ function vToday(){
   const st=doseStatus(),lw=lastW();
   let h=`<h1>Today</h1><p class="m">${new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'})}</p>`;
   if(st.late)h+=`<div class="al">${st.txt}</div>`;
-  h+=`<div class="c hero">${ring(st.days)}<div><h2>Dose countdown</h2><p class="m">${st.late?'Dose overdue.':st.txt}</p><button class="g" onclick="go('dose')">Log a dose</button></div></div>`;
+  const ld=lastD();
+  h+=`<div class="c hero">${ring(st.days)}<div><h2>Dose countdown</h2><p class="m" style="margin-bottom:2px">${st.late?'Dose overdue.':st.txt}</p>${ld?`<p class="m" style="margin-top:0">Currently on <b style="color:var(--ink)">${e(ld.drug)} ${ld.mg} mg</b></p>`:''}<button class="g" onclick="go('dose')">Log a dose</button></div></div>`;
   h+=`<div class="c">${bar(protToday(),S.pt,'Protein (g)')}${bar(waterToday(),S.wt,'Water (ml)')}<div class="ch"><button class="g" onclick="addWater(250)">+250 ml</button><button class="g" onclick="addWater(500)">+500 ml</button><button class="g" onclick="go('food')">Add food</button></div></div>`;
-  if(lw){const f=S.weights[0];h+=`<div class="c"><h2>Weight</h2><div class="big">${fw(lw.kg)}</div><p class="m">BMI ${bmi(lw.kg).toFixed(1)} · ${fdiff(lw.kg-f.kg)} since ${fd(f.d)}</p></div>`}
+  if(lw){const f=S.weights[0];h+=`<div class="c"><h2>Weight</h2><div class="big">${fw(lw.kg)}</div><p class="m">BMI ${bmi(lw.kg).toFixed(1)} · ${fdiff(lw.kg-f.kg)} since ${fd(f.d)}</p><button class="g" onclick="go('weight')">Log weight</button></div>`}
   else h+=`<div class="c"><h2>Weight</h2><p class="m">Add your first weigh-in to see progress.</p><button onclick="go('weight')">Log weight</button></div>`;
   if(S.maint&&S.goal&&lw){const o=lw.kg-S.goal;h+=`<div class="${o>2?'al':'c'}"><h2>Maintenance</h2><p class="m" style="margin:0">${o>2?`You are ${fdiff(o)} above your target. Time to review your routine.`:`Within 2 kg of your target weight. Keep it up.`}</p></div>`}
   else if(plateau())h+=`<div class="al"><b>Plateau spotted.</b> Your weight has barely moved in 3 weeks. Check protein, fibre and strength training, and talk to your clinician if it persists.</div>`;
   return h+foot()}
 
 function vDose(){
-  const st=doseStatus(),drug=(lastD()||{}).drug||'Tirzepatide',ds=[...S.doses].map((x,i)=>({...x,i})).reverse();
+  const st=doseStatus(),ds=[...S.doses].map((x,i)=>({...x,i})).reverse();
+  const ed=edI!==null?S.doses[edI]:null;
+  const drug=ed?ed.drug:((lastD()||{}).drug||'Tirzepatide');
   let h=`<h1>Doses</h1><p class="m">${st.txt}</p>`;
   if(st.late)h+=`<div class="al">${st.txt}</div>`;
-  h+=`<div class="c"><h2>Log an injection</h2>
+  h+=`<div class="c"><h2>${ed?'Edit injection':'Log an injection'}</h2>
   <label>Medicine</label><select id="dg" onchange="dsel()">${Object.keys(D).map(k=>`<option ${k===drug?'selected':''}>${k}</option>`).join('')}</select>
-  <div class="r"><div><label>Dose (mg)</label><select id="dm">${D[drug].map(x=>`<option>${x}</option>`).join('')}</select></div><div><label>Date</label><input id="dd" type="date" value="${td()}"></div></div>
-  <label>Injection site (least recently used first)</label><select id="ds">${SITES.map(s=>`<option ${s===sugSite()?'selected':''}>${s}</option>`).join('')}</select>
-  <p></p><button onclick="addDose()">Save dose</button></div>
+  <div class="r"><div><label>Dose (mg)</label><select id="dm">${D[drug].map(x=>`<option ${ed&&x===ed.mg?'selected':''}>${x}</option>`).join('')}</select></div><div><label>Date</label><input id="dd" type="date" value="${ed?ed.d:td()}"></div></div>
+  <label>Injection site</label><select id="ds">${SITES.map(s=>`<option ${s===(ed?ed.site:sugSite())?'selected':''}>${s}</option>`).join('')}</select>
+  ${ed?'':`<p class="m" style="margin:0 0 8px">Next recommended site: <b style="color:var(--ink)">${sugSite()}</b>, to rotate away from your last injection.</p>`}
+  <div class="r"><button onclick="addDose()">${ed?'Update dose':'Save dose'}</button>${ed?`<button class="g" onclick="edI=null;render()">Cancel</button>`:''}</div></div>
   <div class="c"><h2>Reminders</h2><p class="m">${S.notif?'Alerts on. You will get a notification when you open JabLog and a dose is due.':'Get an alert when a dose is due or overdue while JabLog is open.'}</p><button class="g" onclick="askNotif()">${S.notif?'Alerts enabled':'Enable alerts'}</button></div>
-  <div class="c"><h2>History</h2>${ds.length?ds.slice(0,20).map(x=>`<div class="row"><span>${fd(x.d)} · ${e(x.drug)} ${x.mg} mg<br><span class="m">${e(x.site)}</span></span><button class="d" onclick="del('doses',${x.i})">Delete</button></div>`).join(''):'<p class="m">No doses logged yet.</p>'}</div>`;
+  <div class="c"><h2>History</h2>${ds.length?ds.slice(0,20).map(x=>`<div class="row"><span>${fd(x.d)} · ${e(x.drug)} ${x.mg} mg${dd(x.d,td())<0&&x.i===S.doses.length-1?' <span class="m">(most recent)</span>':''}<br><span class="m">${e(x.site)}</span></span><span style="display:flex;gap:4px"><button class="d" onclick="edI=${x.i};go('dose')">Edit</button><button class="d" onclick="del('doses',${x.i})">Delete</button></span></div>`).join(''):'<p class="m">No doses logged yet.</p>'}</div>`;
   return h+foot()}
 
 function chart(){
@@ -159,6 +169,21 @@ function vWeight(){
   const inp=S.u==='st'?`<div class="r"><div><label>Stone</label><input id="w1" type="number" inputmode="decimal"></div><div><label>Pounds</label><input id="w2" type="number" inputmode="decimal" step="0.1"></div></div>`:`<label>${S.u==='kg'?'Kilograms':'Pounds'}</label><input id="w1" type="number" inputmode="decimal" step="0.1">`;
   let h=`<h1>Weight</h1>`;
   if(lw)h+=`<div class="c"><div class="big">${fw(lw.kg)}</div><p class="m">BMI ${bmi(lw.kg).toFixed(1)}${S.goal?` · ${fdiff(lw.kg-S.goal)} from target`:''}</p>${chart()}</div>`;
+  if(S.weights.length>1){
+    const f=S.weights[0],t7=trend(7),t30=trend(30);
+    let prog='';
+    if(S.goal&&f.kg!==S.goal){
+      const pct=Math.max(0,Math.min(100,(f.kg-lw.kg)/(f.kg-S.goal)*100));
+      prog=`<div class="row" style="border:0;padding:0"><span>Progress to target</span><span class="m">${pct.toFixed(0)}%</span></div><div class="bar"><i style="width:${pct}%"></i></div>`;
+    }
+    h+=`<div class="c"><h2>Progress</h2>
+    <div class="row" style="border:0;padding:4px 0"><span>Starting weight</span><span>${fw(f.kg)} · ${fd(f.d)}</span></div>
+    <div class="row"><span>Current weight</span><span>${fw(lw.kg)}</span></div>
+    <div class="row"><span>Total change</span><span>${fdiff(lw.kg-f.kg)}</span></div>
+    <div class="row"><span>Last 7 days</span><span class="m">${t7===null?'Not enough data':fdiff(t7)}</span></div>
+    <div class="row"><span>Last 30 days</span><span class="m">${t30===null?'Not enough data':fdiff(t30)}</span></div>
+    ${prog}</div>`;
+  }
   h+=`<div class="c"><h2>Add weigh-in</h2>${inp}<label>Date</label><input id="wd" type="date" value="${td()}"><p></p><button onclick="addW()">Save weight</button></div>`;
   h+=`<div class="c"><h2>Maintenance mode</h2><p class="m">Switch on when you reach your target or stop the medication. JabLog watches for regain.</p>
   <div class="ch"><button class="${S.maint?'':'g'}" onclick="S.maint=!S.maint;save();render()">${S.maint?'Maintenance on':'Turn on maintenance'}</button></div>
@@ -182,8 +207,12 @@ function vCost(){
   const mo=P.length?Math.max(1,dd(P[0].d,td())/30.4):1;
   const by={};P.forEach(x=>{(by[x.p]=by[x.p]||[]).push(x.c)});
   const avg=P.length?tot/P.length:0;
-  return `<h1>Spend</h1><div class="c"><div class="r"><div><div class="big">${gbp(tot)}</div><p class="m">Total spent</p></div><div><div class="big">${gbp(tot/mo)}</div><p class="m">Per month</p></div></div>
-  <p class="m" style="margin:0">${lost>0.5?`Cost per ${S.u==='kg'?'kg':'lb'} lost: <b>${gbp(S.u==='kg'?tot/lost:tot/(lost*2.20462))}</b>`:'Cost per kg lost appears once you have lost weight.'}</p></div>
+  const thisMo=P.filter(x=>x.d.slice(0,7)===td().slice(0,7)).reduce((a,x)=>a+x.c,0);
+  const perDose=S.doses.length?tot/S.doses.length:0;
+  return `<h1>Spend</h1><div class="c"><div class="r"><div><div class="big">${gbp(tot)}</div><p class="m">Total spent</p></div><div><div class="big">${gbp(tot/mo)}</div><p class="m">Avg. per month</p></div></div>
+  <div class="row" style="border-top:1px solid var(--ln);margin-top:4px"><span>This month</span><span>${gbp(thisMo)}</span></div>
+  ${P.length?`<div class="row"><span>Avg. cost per injection</span><span>${gbp(perDose)}</span></div>`:''}
+  <p class="m" style="margin:8px 0 0">${lost>0.5?`Cost per ${S.u==='kg'?'kg':'lb'} lost: <b>${gbp(S.u==='kg'?tot/lost:tot/(lost*2.20462))}</b>`:'Cost per kg lost appears once you have lost weight.'}</p></div>
   <div class="c"><h2>Add a pen purchase</h2><div class="r"><div><label>Provider</label><select id="pp">${PROVS.map(x=>`<option>${x}</option>`).join('')}</select></div><div><label>Price (£)</label><input id="pc" type="number" inputmode="decimal" step="0.01"></div></div>
   <div class="r"><div><label>Date</label><input id="pd" type="date" value="${td()}"></div></div><p></p><button onclick="addPen()">Save purchase</button></div>
   ${Object.keys(by).length?`<div class="c"><h2>By provider</h2><table><tr><th>Provider</th><th>Pens</th><th>Avg price</th></tr>${Object.keys(by).map(k=>`<tr><td>${k}</td><td>${by[k].length}</td><td>${gbp(by[k].reduce((a,b)=>a+b,0)/by[k].length)}</td></tr>`).join('')}</table></div>
@@ -197,10 +226,19 @@ function vMore(){
   <label>Weight units</label><select id="su" onchange="S.u=this.value;save();render()">${[['st','Stone and lb'],['kg','Kilograms'],['lb','Pounds']].map(x=>`<option value="${x[0]}" ${S.u===x[0]?'selected':''}>${x[1]}</option>`).join('')}</select>
   <div class="r"><div><label>Height (cm)</label><input id="sh" type="number" value="${S.h}" onchange="S.h=+this.value||170;save()"></div><div><label>Target weight (${S.u==='kg'?'kg':'lb'})</label><input id="sg" type="number" step="0.1" value="${w0}" onchange="S.goal=this.value?(S.u==='kg'?+this.value:+this.value/2.20462):0;save()"></div></div>
   <div class="r"><div><label>Protein goal (g)</label><input type="number" value="${S.pt}" onchange="S.pt=+this.value||100;save()"></div><div><label>Water goal (ml)</label><input type="number" value="${S.wt}" onchange="S.wt=+this.value||2000;save()"></div></div></div>`;
+  h+=`<div class="c"><h2>Privacy</h2>
+  <div class="row" style="border:0;padding:4px 0"><span>Account required?</span><span class="m">No — optional</span></div>
+  <div class="row"><span>Without an account</span><span class="m">Stays on this device</span></div>
+  <div class="row"><span>Signed in</span><span class="m">Synced, encrypted, private to you</span></div>
+  <div class="row"><span>Shared with others?</span><span class="m">Never sold or shared</span></div>
+  <p class="m" style="margin-top:8px">Use "Delete all my data" below to erase everything on this device. To delete your account and data from our servers too, email us using the address in the Privacy Policy linked at the bottom of this page.</p></div>`;
   if(!unlocked())return h+paywall('Side-effect log and GP report')+foot();
   h+=`<div class="c"><h2>Side-effect log</h2><div class="r"><div><label>Symptom</label><select id="fs">${FXS.map(x=>`<option>${x}</option>`).join('')}</select></div><div><label>Severity</label><select id="fv"><option>Mild</option><option>Moderate</option><option>Severe</option></select></div></div>
   <label>Note (optional)</label><input id="fnote"><p></p><button onclick="addFx()">Save entry</button>
   ${fx.slice(0,10).map(x=>`<div class="row"><span>${fd(x.d)} · ${e(x.t)} (${x.v})${x.n?`<br><span class="m">${e(x.n)}</span>`:''}</span><button class="d" onclick="del('fx',${x.i})">Delete</button></div>`).join('')}</div>`;
+  const tl=timeline();
+  h+=`<div class="c"><h2>Treatment timeline</h2><p class="m">Doses, weigh-ins, side effects and purchases, all in one place.</p>
+  ${tl.length?tl.map(x=>`<div class="row"><span>${x.ic} ${x.txt}</span><span class="m">${fd(x.d)}</span></div>`).join(''):'<p class="m">Nothing logged yet.</p>'}</div>`;
   const lw=lastW(),f=S.weights[0],since=dd(add(td(),-90),td());
   h+=`<div class="c" id="rep"><h2>GP / pharmacist report</h2><p class="m">Generated ${fd(td())} ${new Date().getFullYear()}</p>
   <p><b>Weight:</b> ${f&&lw?`${fw(f.kg)} (${fd(f.d)}) to ${fw(lw.kg)} (${fd(lw.d)}), ${fdiff(lw.kg-f.kg)}. BMI ${bmi(lw.kg).toFixed(1)}.`:'No weigh-ins.'}</p>
@@ -212,9 +250,18 @@ function vMore(){
   h+=`<div class="c"><p class="m" style="margin:0"><a href="https://claude.ai/artifact/JvdxrATqcShMfpuDDJEr3b" target="_blank" rel="noopener" style="color:var(--ac)">Privacy Policy</a> · <a href="https://claude.ai/artifact/MDy5YmBGYJZosJAdP5hvvK" target="_blank" rel="noopener" style="color:var(--ac)">Terms of Service</a></p></div>`;
   return h+foot()}
 
+function timeline(){
+  const items=[];
+  S.doses.forEach(x=>items.push({d:x.d,ic:'💉',txt:`Injected ${e(x.drug)} ${x.mg} mg · ${e(x.site)}`}));
+  S.weights.forEach(x=>items.push({d:x.d,ic:'⚖️',txt:`Weighed in at ${fw(x.kg)}`}));
+  S.fx.forEach(x=>items.push({d:x.d,ic:'📝',txt:`${e(x.t)} (${x.v})${x.n?' – '+e(x.n):''}`}));
+  S.pens.forEach(x=>items.push({d:x.d,ic:'£',txt:`Bought a pen from ${e(x.p)} · ${gbp(x.c)}`}));
+  if(S.maint&&S.stop)items.push({d:S.stop,ic:'⏸',txt:'Stopped medication · maintenance mode started'});
+  return items.sort((a,b)=>b.d.localeCompare(a.d)).slice(0,40)}
+
 const foot=()=>`<p class="m" style="margin-top:14px">JabLog is a personal tracker, not medical advice. Always follow your prescriber's instructions. Signed-in accounts sync securely. Without an account, data stays on this device.</p>`;
 
-function go(t){tab=t;render();window.scrollTo(0,0)}
+function go(t){if(t!=='dose')edI=null;tab=t;render();window.scrollTo(0,0)}
 function render(){
   $('#main').innerHTML=({today:vToday,dose:vDose,weight:vWeight,food:vFood,cost:vCost,more:vMore})[tab]();
   $('#nav').innerHTML=[['today','🏠','Today'],['dose','💉','Doses'],['weight','⚖️','Weight'],['food','🥩','Food'],['cost','£','Spend'],['more','⋯','More']].map(x=>`<button class="${tab===x[0]?'on':''}" onclick="go('${x[0]}')"><b>${x[1]}</b>${x[2]}</button>`).join('')}
@@ -223,7 +270,7 @@ function addW(){
   let kg=S.u==='st'?((+$v('w1')||0)*14+(+$v('w2')||0))/2.20462:S.u==='lb'?(+$v('w1'))/2.20462:+$v('w1');
   if(!(kg>20&&kg<400))return alert('Enter a valid weight.');
   S.weights.push({d:$v('wd')||td(),kg});S.weights.sort((a,b)=>a.d.localeCompare(b.d));save();render()}
-function addDose(){S.doses.push({d:$v('dd')||td(),drug:$v('dg'),mg:+$v('dm'),site:$v('ds')});S.doses.sort((a,b)=>a.d.localeCompare(b.d));save();render()}
+function addDose(){const rec={d:$v('dd')||td(),drug:$v('dg'),mg:+$v('dm'),site:$v('ds')};if(edI!==null){S.doses[edI]=rec;edI=null}else S.doses.push(rec);S.doses.sort((a,b)=>a.d.localeCompare(b.d));save();render()}
 function addFood(n,p){if(!(p>=0)||!n)return;S.food.push({d:td(),n,p:+p});save();render()}
 function addWater(ml){S.water[td()]=waterToday()+ml;save();render()}
 function addPen(){const c=+$v('pc');if(!(c>0))return alert('Enter the price.');S.pens.push({d:$v('pd')||td(),p:$v('pp'),c});S.pens.sort((a,b)=>a.d.localeCompare(b.d));save();render()}
