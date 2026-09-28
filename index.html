@@ -43,6 +43,7 @@ nav button b{display:block;font-size:18px;font-weight:600}nav button.on{color:va
 <div id="main"></div>
 <nav id="nav"></nav>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="https://cdn.paddle.com/paddle/v2/paddle.js"></script>
 <script>
 const K='jablog:v1',$=s=>document.querySelector(s);
 const DEF={u:'st',h:170,goal:0,pt:100,wt:2000,weights:[],doses:[],fx:[],food:[],water:{},pens:[],maint:false,stop:'',trial:null,premium:false,notif:false,onboarded:false,dismissedSave:false};
@@ -73,7 +74,13 @@ async function auth(m){
     if(m==='up'&&!r.data.session)alert('Check your email to confirm your account, then sign in.');
   }catch(x){alert('Could not reach the server. Check your connection.')}}
 const subBtns=()=>`<div class="r"><button onclick="checkout('monthly')">£4.99 / month</button><button class="g" onclick="checkout('yearly')">£29.99 / year</button></div>`;
-async function checkout(plan){try{const r=await sb.functions.invoke('create-checkout',{body:{plan}});if(r.data&&r.data.url)location.href=r.data.url;else alert(r.data&&r.data.error?r.data.error:'Could not start checkout. Please try again.')}catch(x){alert('Could not start checkout. Please try again.')}}
+const PADDLE_TOKEN='test_6666de5637c3a0970b2fcc29104',PADDLE_ENV='sandbox',PRICES={monthly:'pri_01m3hztkmhnq99vqtt5nsqrq2w',yearly:'pri_01m3hzx57c18a02kk3b2p9b6nk'};
+let paddleOk=false;
+try{if(!PADDLE_TOKEN.startsWith('PASTE')){if(PADDLE_ENV==='sandbox')Paddle.Environment.set('sandbox');Paddle.Initialize({token:PADDLE_TOKEN,eventCallback:ev=>{if(ev&&ev.name==='checkout.completed')[2500,7000,15000].forEach(t=>setTimeout(()=>{if(USER)pull()},t))}});paddleOk=true}}catch(x){}
+function checkout(plan){
+  if(!USER)return;
+  if(!paddleOk)return alert('Payments are not switched on yet. Please check back soon.');
+  try{Paddle.Checkout.open({items:[{priceId:PRICES[plan],quantity:1}],customer:{email:USER.email},customData:{user_id:USER.id}})}catch(x){alert('Could not start checkout. Please try again.')}}
 async function portal(){try{const r=await sb.functions.invoke('billing-portal');if(r.data&&r.data.url)location.href=r.data.url;else alert(r.data&&r.data.error?r.data.error:'Could not open billing. Please try again.')}catch(x){alert('Could not open billing. Please try again.')}}
 async function signOut(){await sb.auth.signOut();USER=null;ENT=null;S={...DEF};try{localStorage.setItem(K,JSON.stringify(S))}catch(x){}render()}
 const D={Tirzepatide:[2.5,5,7.5,10,12.5,15],Semaglutide:[0.25,0.5,1,1.7,2.4,7.2]};
